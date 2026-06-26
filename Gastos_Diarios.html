@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Gastos Diários</title>
+<style>
+  :root {
+    --bg: #f5f5f3;
+    --card-bg: #ffffff;
+    --border: #e0ddd6;
+    --text-primary: #1a1a18;
+    --text-secondary: #6b6862;
+    --text-tertiary: #9a9690;
+    --success: #1e7b45;
+    --danger: #c00000;
+    --accent: #1f3864;
+    --accent-light: #dce6f1;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513;
+      --card-bg: #1f1e1b;
+      --border: #34322d;
+      --text-primary: #f0eee9;
+      --text-secondary: #b5b1a8;
+      --text-tertiary: #7d7a73;
+      --success: #4ade80;
+      --danger: #f87171;
+      --accent: #7f9ed4;
+      --accent-light: #2a3a52;
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;
+  }
+  .container { max-width: 480px; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 4px; }
+  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 1.5rem; }
+  input[type="number"], input[type="text"] {
+    border: none; background: transparent; color: var(--text-primary);
+    font-family: inherit; font-size: 15px; outline: none;
+  }
+  .lista { background: var(--card-bg); border: 0.5px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .linha {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-bottom: 0.5px solid var(--border);
+  }
+  .linha:last-child { border-bottom: none; }
+  .linha .nome-input { flex: 1; min-width: 0; }
+  .linha .valor-wrap { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+  .linha .valor-input { width: 78px; text-align: right; }
+  .remove-btn {
+    width: 30px; height: 30px; flex-shrink: 0; border: none; background: transparent;
+    color: var(--text-tertiary); font-size: 18px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+  }
+  .remove-btn:active { background: var(--border); }
+  #add-row {
+    width: 100%; margin-top: 10px; padding: 12px; font-size: 14px; font-weight: 500;
+    border: 0.5px dashed var(--border); border-radius: 12px; background: transparent;
+    color: var(--accent); cursor: pointer;
+  }
+  #add-row:active { background: var(--accent-light); }
+  .resumo { margin-top: 1.5rem; display: flex; flex-direction: column; gap: 8px; }
+  .resumo-linha { display: flex; justify-content: space-between; font-size: 15px; font-weight: 600; padding: 0 4px; }
+  .footer-bar { display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; gap: 8px; }
+  #status { font-size: 12px; color: var(--text-tertiary); }
+  #reset-btn {
+    font-size: 12px; padding: 6px 12px; border-radius: 8px; border: 0.5px solid var(--border);
+    background: transparent; color: var(--text-secondary); cursor: pointer;
+  }
+  #reset-btn:active { background: var(--border); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Gastos Diários</h1>
+  <p class="subtitle">Marque aqui e depois copie para sua planilha</p>
+
+  <div class="lista" id="linhas"></div>
+
+  <button id="add-row">+ Adicionar gasto</button>
+
+  <div class="resumo">
+    <div class="resumo-linha">
+      <span>Total de gastos</span>
+      <span id="total-gastos">R$ 0,00</span>
+    </div>
+  </div>
+
+  <div class="footer-bar">
+    <span id="status">Salvo automaticamente neste celular</span>
+    <button id="reset-btn">Limpar tudo</button>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'gastos-diarios';
+
+const categoriasPadrao = [
+  "Cartão de crédito",
+  "Cartão Gisele",
+  "MC",
+  "Gasolina",
+  "Carro",
+  "Mercado",
+  "Almoço",
+  "Rolê",
+  "Outros"
+];
+
+const linhasEl = document.getElementById('linhas');
+const totalEl = document.getElementById('total-gastos');
+const statusEl = document.getElementById('status');
+
+function fmt(v) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+let saveTimeout = null;
+function agendarSalvar() {
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(salvar, 300);
+}
+
+function salvar() {
+  const linhas = Array.from(linhasEl.children).map(row => ({
+    nome: row.querySelector('.nome-input').value,
+    valor: row.querySelector('.valor-input').value
+  }));
+  const estado = { linhas };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(estado));
+    statusEl.textContent = 'Salvo automaticamente neste celular';
+  } catch (e) {
+    statusEl.textContent = 'Não foi possível salvar';
+  }
+}
+
+function criarLinha(nome, valor) {
+  const row = document.createElement('div');
+  row.className = 'linha';
+  row.innerHTML = `
+    <input type="text" value="${nome}" placeholder="Nome do gasto" class="nome-input">
+    <div class="valor-wrap">
+      <span style="font-size:14px; color:var(--text-secondary);">R$</span>
+      <input type="number" value="${valor}" placeholder="0" min="0" step="10" inputmode="decimal" class="valor-input">
+    </div>
+    <button class="remove-btn" aria-label="Remover">&#10005;</button>
+  `;
+  row.querySelectorAll('input').forEach(i => i.addEventListener('input', () => { recalcular(); agendarSalvar(); }));
+  row.querySelector('.remove-btn').addEventListener('click', () => {
+    row.remove();
+    recalcular();
+    agendarSalvar();
+  });
+  return row;
+}
+
+function recalcular() {
+  const valores = Array.from(document.querySelectorAll('.valor-input')).map(i => parseFloat(i.value) || 0);
+  const totalGastos = valores.reduce((a, b) => a + b, 0);
+  totalEl.textContent = fmt(totalGastos);
+}
+
+function carregar() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const estado = JSON.parse(raw);
+      linhasEl.innerHTML = '';
+      estado.linhas.forEach(l => linhasEl.appendChild(criarLinha(l.nome, l.valor)));
+      recalcular();
+      return;
+    }
+  } catch (e) {}
+  categoriasPadrao.forEach(nome => linhasEl.appendChild(criarLinha(nome, '')));
+  recalcular();
+}
+
+document.getElementById('add-row').addEventListener('click', () => {
+  linhasEl.appendChild(criarLinha('', ''));
+  recalcular();
+  agendarSalvar();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  if (!confirm('Limpar todos os valores deste mês?')) return;
+  linhasEl.innerHTML = '';
+  categoriasPadrao.forEach(nome => linhasEl.appendChild(criarLinha(nome, '')));
+  recalcular();
+  agendarSalvar();
+});
+
+carregar();
+</script>
+</body>
+</html>
